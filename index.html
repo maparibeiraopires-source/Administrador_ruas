@@ -225,15 +225,42 @@ function abrirDuplicar(i){
   $("modal").classList.add("open");
 }
 
+function normalizarNomeColuna(c){
+  return String(c).normalize("NFD").replace(/[\\u0300-\\u036f]/g,"").toLowerCase().trim();
+}
+
+function ehCampoNumerico(c){
+  const n=normalizarNomeColuna(c);
+  return /(^|\\s)(id|numero da rua|cep|metragem|latitude|longitude|precisao gps)(\\s|$)/i.test(n);
+}
+
+function opcoesTipo(valor){
+  const lista=["Rua","Avenida","Travessa","Alameda","Estrada","Viela","Rodovia","Praça","Largo","Servidão","Passagem"];
+  const v=String(valor??"").trim();
+  if(v && !lista.some(x=>x.toLowerCase()===v.toLowerCase())) lista.unshift(v);
+  return `<select data-col="TIPO">${lista.map(x=>`<option value="${esc(x)}" ${x.toLowerCase()===v.toLowerCase()?"selected":""}>${esc(x)}</option>`).join("")}</select>`;
+}
+
 function montarForm(obj){
   $("form").innerHTML=camposEditaveis().map((c)=>{
     const valor=obj[c]??"";
-    const long=String(valor).length>80 || /observ|descri|decreto|lei|complemento/i.test(c);
+    const n=normalizarNomeColuna(c);
+    const long=String(valor).length>80 || /observ|descri|decreto|lei|complemento/.test(n);
+    let controle;
+
+    if(n==="tipo"){
+      controle=opcoesTipo(valor);
+    } else if(long){
+      controle=`<textarea data-col="${esc(c)}" rows="3">${esc(valor)}</textarea>`;
+    } else if(ehCampoNumerico(c)){
+      controle=`<input data-col="${esc(c)}" type="number" step="any" value="${esc(valor)}">`;
+    } else {
+      controle=`<input data-col="${esc(c)}" value="${esc(valor)}">`;
+    }
+
     return `<div class="${long?'full':''} field">
       <label>${esc(c)}</label>
-      ${long
-        ? `<textarea data-col="${esc(c)}" rows="3">${esc(valor)}</textarea>`
-        : `<input data-col="${esc(c)}" value="${esc(valor)}">`}
+      ${controle}
     </div>`;
   }).join("");
 }
@@ -241,7 +268,17 @@ function montarForm(obj){
 function valoresFormulario(){
   const obj={};
   document.querySelectorAll("#form [data-col]").forEach(el=>{
-    obj[el.dataset.col]=el.value;
+    const col=el.dataset.col;
+    let valor=el.value;
+
+    if(ehCampoNumerico(col)){
+      valor=valor.trim()==="" ? null : Number(valor);
+      if(valor!==null && Number.isNaN(valor)) valor=null;
+    } else {
+      valor=valor.trim()==="" ? null : valor;
+    }
+
+    obj[col]=valor;
   });
   return obj;
 }
